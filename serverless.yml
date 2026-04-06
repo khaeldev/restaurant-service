@@ -1,3 +1,5 @@
+org: restaurantservice
+app: restaurant-service
 service: restaurant-service
 
 provider:
