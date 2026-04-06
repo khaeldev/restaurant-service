@@ -1,0 +1,9 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "@stylistic/ts/space-before-function-paren": "off",
+    "@stylistic/ts/no-extra-parens": "off",
+    "semi": "off",
+    "@stylistic/ts/semi": "off"
+  }
+}

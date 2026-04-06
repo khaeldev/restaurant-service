@@ -1,0 +1,90 @@
+name: Sls deploy
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  STAGE: dev
+
+jobs:
+  backend:
+    name: Deploy Serverless Service
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "22.19.0"
+
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Configure AWS Credentials
+        run: |
+          echo "Configuring AWS credentials..."
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }} # Optional: only if using session tokens
+
+      - name: Deploy with Serverless
+        run: serverless deploy --stage ${{ env.STAGE }} --region ${{ env.AWS_REGION }}  --param=account=${{ secrets.AWS_ACCOUNT }} --param=OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} --param=ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} --param=JWT_SECRET=${{ secrets.JWT_SECRET }} --param=FARMERS_MARKET_API_URL=${{ secrets.FARMERS_MARKET_API_URL }}
+        env:
+          SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          # AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }} # Optional
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  
+  frontend:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.19.0' # o la versión que uses en tu Next
+          cache: 'npm'
+          cache-dependency-path: ./frontend/package-lock.json
+
+      - name: Install deps
+        run: npm install
+        working-directory: ./frontend
+
+      - name: Create .env.production
+        run: |
+          echo "NEXT_PUBLIC_API_URL=${{ secrets.NEXT_PUBLIC_API_URL }}" >> .env.production
+        working-directory: ./frontend
+
+      - name: Install Vercel CLI
+        run: npm install -g vercel
+
+      - name: Pull Vercel Environment
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./frontend
+
+      - name: Build Project
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./frontend
+
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
+        working-directory: ./frontend

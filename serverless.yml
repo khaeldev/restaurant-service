@@ -1,0 +1,479 @@
+org: testslsv4123
+service: restaurant-service
+
+provider:
+  name: aws
+  runtime: nodejs22.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  architecture: arm64
+  memorySize: 512
+  timeout: 30
+
+  environment:
+    NODE_ENV: ${self:provider.stage}
+    SERVICE_TABLE_NAME: !Ref RestaurantTable
+    SERVICE_EVENT_BUS: !Ref RestaurantEventBus
+    REGION: ${self:provider.region}
+    SDK_CONNECTION_TIMEOUT: 5000
+    SDK_SOCKET_TIMEOUT: 5000
+    OPENAI_API_KEY: ${param:OPENAI_API_KEY}
+    ANTHROPIC_API_KEY: ${param:ANTHROPIC_API_KEY}
+    CLAUDE_MODEL: claude-haiku-4-5-20251001
+    # Optional override; if empty, code uses FARMERS_MARKET_INTERNAL_URL (this stack’s farmersMarketBuy HTTP API)
+    FARMERS_MARKET_API_URL: ${param:FARMERS_MARKET_API_URL, ''}
+    FARMERS_MARKET_INTERNAL_URL:
+      Fn::Sub:
+        - 'https://${RestApiId}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/farmers-market/buy'
+        - RestApiId: !Ref ApiGatewayRestApi
+          Stage: ${self:provider.stage}
+    JWT_SECRET: ${param:JWT_SECRET}
+
+  iam:
+    role:
+      statements:
+
+        # DynamoDB
+        - Effect: Allow
+          Action:
+            - dynamodb:*
+          Resource:
+            - !GetAtt RestaurantTable.Arn
+            - !Sub '${RestaurantTable.Arn}/index/*'
+
+        # EventBridge
+        - Effect: Allow
+          Action:
+            - events:PutEvents
+          Resource: !GetAtt RestaurantEventBus.Arn
+
+        # SQS
+        - Effect: Allow
+          Action:
+            - sqs:*
+          Resource:
+            - !GetAtt OrderQueue.Arn
+            - !GetAtt IngredientQueue.Arn
+            - !GetAtt DishQueue.Arn
+
+plugins:
+  - serverless-offline
+
+package:
+  individually: true
+
+custom:
+  cors:
+    origin: ${self:custom.origins.${self:provider.stage}}
+    headers:
+      - Content-Type
+      - Authorization
+    allowCredentials: true
+
+  origins:
+    dev: https://frontend-alpha-eosin-62.vercel.app
+    prod: https://frontend-alpha-eosin-62.vercel.app
+
+  serverless-offline:
+    httpPort: 3000
+    host: 127.0.0.1
+
+# ============================
+# FUNCTIONS
+# ============================
+
+functions:
+  createOrder:
+    handler: src/functions/createOrder.handler
+    events:
+      - http:
+          path: orders
+          method: post
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+
+  getOrders:
+    handler: src/functions/getOrders.handler
+    events:
+      - http:
+          path: orders
+          method: get
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+
+  getOrderById:
+    handler: src/functions/getOrderById.handler
+    events:
+      - http:
+          path: orders/{orderId}
+          method: get
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+          request:
+            parameters:
+              paths:
+                orderId: true
+
+  getInventory:
+    handler: src/functions/getInventory.handler
+    events:
+      - http:
+          path: inventory
+          method: get
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+
+  getPurchases:
+    handler: src/functions/getPurchases.handler
+    events:
+      - http:
+          path: purchases
+          method: get
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+
+  authAuthorizer:
+    handler: src/functions/authAuthorizer.handler
+    description: JWT token authorizer for API endpoints
+
+  login:
+    handler: src/functions/login.handler
+    events:
+      - http:
+          path: auth/login
+          method: post
+          cors: ${self:custom.cors}
+
+  farmersMarketBuy:
+    handler: src/functions/farmersMarketBuy.handler
+    description: Built-in Farmers Market API (GET ?ingredient=) — used by warehouseWorker unless FARMERS_MARKET_API_URL is set
+    events:
+      - http:
+          path: farmers-market/buy
+          method: get
+          cors: true
+
+  getRecipes:
+    handler: src/functions/getRecipes.handler
+    events:
+      - http:
+          path: recipes
+          method: get
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+
+  processVoiceCommand:
+    handler: src/functions/processVoiceCommand.handler
+    timeout: 60
+    memorySize: 1024
+    events:
+      - http:
+          path: voice/process
+          method: post
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+
+  getConversationHistory:
+    handler: src/functions/getConversationHistory.handler
+    events:
+      - http:
+          path: voice/conversations/{sessionId}
+          method: get
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+          request:
+            parameters:
+              paths:
+                sessionId: true
+
+  getVoiceContext:
+    handler: src/functions/getVoiceContext.handler
+    events:
+      - http:
+          path: voice/context
+          method: get
+          cors: ${self:custom.cors}
+          authorizer:
+            name: authAuthorizer
+            type: request
+            resultTtlInSeconds: 60
+            identitySource: method.request.header.Authorization
+
+  seedData:
+    handler: src/functions/seedData.handler
+    description: Seed recipes and initial inventory (run after deploy via npm run seed)
+    timeout: 60
+    memorySize: 1024
+
+  kitchenOrchestratorWorker:
+    handler: src/functions/kitchenOrchestratorWorker.handler
+    events:
+      - sqs:
+          arn: !GetAtt OrderQueue.Arn
+          batchSize: 1
+
+  warehouseWorker:
+    handler: src/functions/warehouseWorker.handler
+    timeout: 60
+    events:
+      - sqs:
+          arn: !GetAtt IngredientQueue.Arn
+          batchSize: 1
+
+  kitchenPreparationWorker:
+    handler: src/functions/kitchenPreparationWorker.handler
+    events:
+      - sqs:
+          arn: !GetAtt DishQueue.Arn
+          batchSize: 1
+
+# ============================
+# RESOURCES
+# ============================
+
+resources:
+  Resources:
+
+    # ============================
+    # DYNAMODB
+    # ============================
+
+    RestaurantTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: restaurant-service-${self:provider.stage}
+        BillingMode: PAY_PER_REQUEST
+
+        AttributeDefinitions:
+          - AttributeName: PK
+            AttributeType: S
+          - AttributeName: SK
+            AttributeType: S
+          - AttributeName: GSI1PK
+            AttributeType: S
+          - AttributeName: GSI1SK
+            AttributeType: S
+          - AttributeName: GSI2PK
+            AttributeType: S
+          - AttributeName: GSI2SK
+            AttributeType: S
+          - AttributeName: GSI3PK
+            AttributeType: S
+          - AttributeName: GSI3SK
+            AttributeType: S
+
+        KeySchema:
+          - AttributeName: PK
+            KeyType: HASH
+          - AttributeName: SK
+            KeyType: RANGE
+
+        GlobalSecondaryIndexes:
+          - IndexName: GSI1
+            KeySchema:
+              - AttributeName: GSI1PK
+                KeyType: HASH
+              - AttributeName: GSI1SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+          - IndexName: GSI2
+            KeySchema:
+              - AttributeName: GSI2PK
+                KeyType: HASH
+              - AttributeName: GSI2SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+          - IndexName: GSI3
+            KeySchema:
+              - AttributeName: GSI3PK
+                KeyType: HASH
+              - AttributeName: GSI3SK
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+        StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+
+        TimeToLiveSpecification:
+          AttributeName: TTL
+          Enabled: true
+
+    # ============================
+    # EVENT BUS
+    # ============================
+
+    RestaurantEventBus:
+      Type: AWS::Events::EventBus
+      Properties:
+        Name: restaurant-service-${self:provider.stage}
+
+    # ============================
+    # SQS + DLQ
+    # ============================
+
+    OrderQueueDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: restaurant-order-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600
+
+    OrderQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: restaurant-order-${self:provider.stage}
+        VisibilityTimeout: 120
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt OrderQueueDLQ.Arn
+          maxReceiveCount: 3
+
+    IngredientQueueDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: restaurant-ingredient-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600
+
+    IngredientQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: restaurant-ingredient-${self:provider.stage}
+        VisibilityTimeout: 120
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt IngredientQueueDLQ.Arn
+          maxReceiveCount: 3
+
+    DishQueueDLQ:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: restaurant-dish-dlq-${self:provider.stage}
+        MessageRetentionPeriod: 1209600
+
+    DishQueue:
+      Type: AWS::SQS::Queue
+      Properties:
+        QueueName: restaurant-dish-${self:provider.stage}
+        VisibilityTimeout: 120
+        RedrivePolicy:
+          deadLetterTargetArn: !GetAtt DishQueueDLQ.Arn
+          maxReceiveCount: 3
+
+    # ============================
+    # EVENTBRIDGE RULES
+    # ============================
+
+    OrderCreatedRule:
+      Type: AWS::Events::Rule
+      Properties:
+        EventBusName: !Ref RestaurantEventBus
+        EventPattern:
+          source:
+            - restaurant.service
+          detail-type:
+            - OrderCreated
+        State: ENABLED
+        Targets:
+          - Arn: !GetAtt OrderQueue.Arn
+            Id: OrderQueueTarget
+            RoleArn: !GetAtt EventBridgeRole.Arn
+            DeadLetterConfig:
+              Arn: !GetAtt OrderQueueDLQ.Arn
+
+    IngredientsRequestedRule:
+      Type: AWS::Events::Rule
+      Properties:
+        EventBusName: !Ref RestaurantEventBus
+        EventPattern:
+          source:
+            - restaurant.service
+          detail-type:
+            - IngredientsRequested
+        State: ENABLED
+        Targets:
+          - Arn: !GetAtt IngredientQueue.Arn
+            Id: IngredientQueueTarget
+            RoleArn: !GetAtt EventBridgeRole.Arn
+            DeadLetterConfig:
+              Arn: !GetAtt IngredientQueueDLQ.Arn
+
+    IngredientsProcuredRule:
+      Type: AWS::Events::Rule
+      Properties:
+        EventBusName: !Ref RestaurantEventBus
+        EventPattern:
+          source:
+            - restaurant.service
+          detail-type:
+            - IngredientsProcured
+        State: ENABLED
+        Targets:
+          - Arn: !GetAtt DishQueue.Arn
+            Id: DishQueueTarget
+            RoleArn: !GetAtt EventBridgeRole.Arn
+            DeadLetterConfig:
+              Arn: !GetAtt DishQueueDLQ.Arn
+
+    # ============================
+    # IAM ROLES
+    # ============================
+
+    EventBridgeRole:
+      Type: AWS::IAM::Role
+      Properties:
+        AssumeRolePolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Principal:
+                Service: events.amazonaws.com
+              Action: sts:AssumeRole
+        Policies:
+          - PolicyName: SendToSQS
+            PolicyDocument:
+              Version: '2012-10-17'
+              Statement:
+                - Effect: Allow
+                  Action:
+                    - sqs:SendMessage
+                  Resource:
+                    - !GetAtt OrderQueue.Arn
+                    - !GetAtt IngredientQueue.Arn
+                    - !GetAtt DishQueue.Arn
+                    - !GetAtt OrderQueueDLQ.Arn
+                    - !GetAtt IngredientQueueDLQ.Arn
+                    - !GetAtt DishQueueDLQ.Arn
