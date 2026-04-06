@@ -3,6 +3,13 @@ import { GetOrderByIdController } from '@core/infrastructure/adapters/in/http/Ge
 import { DynamoOrderRepository } from '@core/infrastructure/repositories/DynamoDB/DynamoOrderRepository'
 import { DynamoDishRepository } from '@core/infrastructure/repositories/DynamoDB/DynamoDishRepository'
 import { logger, responseHandler } from '@powertools/utilities'
+import { SlidingWindowRateLimiter } from '@core/infrastructure/resilience'
+
+// Rate limiter (per-instance)
+const rateLimiter = new SlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 100
+})
 
 // Composition Root
 const orderRepository = new DynamoOrderRepository()
@@ -15,6 +22,7 @@ export const handler = async (
   try {
     logger.info('getOrderById handler invoked', { requestId: event.requestContext?.requestId })
 
+    rateLimiter.check()
     const result = await controller.execute(event)
 
     return responseHandler(200, result)

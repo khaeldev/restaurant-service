@@ -1,15 +1,20 @@
 import axios from 'axios'
 import { config } from '@config/environment'
-import { LLMResponse, VoiceContext } from '../../../domain/services/repositories/IVoiceAIClient'
-import { VoiceCommandIntent } from '../../../domain/aggregates/Conversation'
+import { LLMResponse, VoiceContext } from '@core/domain/services/repositories/IVoiceAIClient'
+import { VoiceCommandIntent } from '@core/domain/aggregates/Conversation'
 import { logger } from '@powertools/utilities'
+import { CircuitBreaker } from '@core/infrastructure/resilience'
+import { Bulkhead } from '@core/infrastructure/resilience'
 
 export class ClaudeAIClient {
   private readonly apiKey: string
   private readonly model: string
   private readonly baseUrl = 'https://api.anthropic.com/v1'
 
-  constructor() {
+  constructor(
+    private readonly circuitBreaker: CircuitBreaker,
+    private readonly bulkhead: Bulkhead
+  ) {
     this.apiKey = config.anthropicApiKey || ''
     this.model = config.claudeModel || 'claude-3-5-sonnet-20241022'
 
@@ -19,45 +24,44 @@ export class ClaudeAIClient {
   }
 
   async processCommand(userMessage: string, context: VoiceContext): Promise<LLMResponse> {
-    try {
-      const systemPrompt = this.buildSystemPrompt(context)
-      const messages = this.buildMessages(userMessage, context)
+    const systemPrompt = this.buildSystemPrompt(context)
+    const messages = this.buildMessages(userMessage, context)
 
-      const response = await axios.post(
-        `${this.baseUrl}/messages`,
-        {
-          model: this.model,
-          max_tokens: 1024,
-          system: systemPrompt,
-          messages
-        },
-        {
-          headers: {
-            'x-api-key': this.apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json'
+    const response = await this.bulkhead.execute(() =>
+      this.circuitBreaker.execute(async () => {
+        return axios.post(
+          `${this.baseUrl}/messages`,
+          {
+            model: this.model,
+            max_tokens: 1024,
+            system: systemPrompt,
+            messages
           },
-          timeout: 30000
-        }
-      )
-      logger.info('LLM response' , {response})
-      
-      const assistantMessage = response.data.content[0].text
-      const intent = this.extractIntent(assistantMessage, userMessage)
-
-      logger.info('Claude processing successful', {
-        userMessage,
-        intent: intent.action,
-        responseLength: assistantMessage.length
+          {
+            headers: {
+              'x-api-key': this.apiKey,
+              'anthropic-version': '2023-06-01',
+              'content-type': 'application/json'
+            },
+            timeout: 30000
+          }
+        )
       })
+    )
+    logger.info('LLM response' , {response})
 
-      return {
-        message: assistantMessage,
-        intent
-      }
-    } catch (error) {
-      logger.error('Claude processing failed', { error })
-      throw new Error(`Command processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    const assistantMessage = response.data.content[0].text
+    const intent = this.extractIntent(assistantMessage, userMessage)
+
+    logger.info('Claude processing successful', {
+      userMessage,
+      intent: intent.action,
+      responseLength: assistantMessage.length
+    })
+
+    return {
+      message: assistantMessage,
+      intent
     }
   }
 

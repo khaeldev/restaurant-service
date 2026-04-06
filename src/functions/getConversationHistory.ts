@@ -3,6 +3,13 @@ import { GetConversationHistoryController } from '@core/infrastructure/adapters/
 import { GetConversationHistoryUsecase } from '@core/app/usecases/GetConversationHistoryUsecase'
 import { DynamoConversationRepository } from '@core/infrastructure/repositories/DynamoDB/DynamoConversationRepository'
 import { logger, responseHandler } from '@powertools/utilities'
+import { SlidingWindowRateLimiter } from '@core/infrastructure/resilience'
+
+// Rate limiter (per-instance)
+const rateLimiter = new SlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 100
+})
 
 const conversationRepository = new DynamoConversationRepository()
 const usecase = new GetConversationHistoryUsecase(conversationRepository)
@@ -14,6 +21,7 @@ export const handler = async (
   try {
     logger.info('getConversationHistory handler invoked', { requestId: event.requestContext?.requestId })
 
+    rateLimiter.check()
     const result = await controller.execute(event)
 
     return responseHandler(200, result)

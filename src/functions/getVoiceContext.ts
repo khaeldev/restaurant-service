@@ -5,6 +5,13 @@ import { DynamoOrderRepository } from '@core/infrastructure/repositories/DynamoD
 import { DynamoRecipeRepository } from '@core/infrastructure/repositories/DynamoDB/DynamoRecipeRepository'
 import { DynamoWarehouseRepository } from '@core/infrastructure/repositories/DynamoDB/DynamoWarehouseRepository'
 import { logger, responseHandler } from '@powertools/utilities'
+import { SlidingWindowRateLimiter } from '@core/infrastructure/resilience'
+
+// Rate limiter (per-instance)
+const rateLimiter = new SlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 100
+})
 
 const orderRepository = new DynamoOrderRepository()
 const recipeRepository = new DynamoRecipeRepository()
@@ -19,6 +26,7 @@ export const handler = async (
   try {
     logger.info('getVoiceContext handler invoked', { requestId: event.requestContext?.requestId })
 
+    rateLimiter.check()
     const result = await controller.execute(event)
 
     return responseHandler(200, result)

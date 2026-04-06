@@ -1,5 +1,6 @@
 import { Logger } from '@aws-lambda-powertools/logger'
 import { Tracer } from '@aws-lambda-powertools/tracer'
+import { CircuitOpenError, RateLimitExceededError, BulkheadFullError } from '@core/infrastructure/resilience'
 
 const logger = new Logger({
   logLevel: 'DEBUG',
@@ -19,7 +20,7 @@ export class GenerateError extends Error {
   name: 'Error'
   public statusCode: number
   public body: Record<string, unknown> | string
-  
+
   constructor (statusCode: number, body: Record<string, unknown> | string) {
     super()
     this.statusCode = statusCode
@@ -36,6 +37,7 @@ export const responseHandler = (statusCode: number, body?: unknown, error?: unkn
     403: 'Forbidden',
     404: 'Not Found',
     405: 'Method Not Allowed',
+    429: 'Too Many Requests',
     500: 'Internal Server Error',
     503: 'Service Unavailable'
   }
@@ -43,6 +45,49 @@ export const responseHandler = (statusCode: number, body?: unknown, error?: unkn
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  }
+
+  // Handle resilience errors with proper HTTP status codes
+  if (error instanceof RateLimitExceededError) {
+    logger.warn('responseHandler: RateLimitExceededError', { error: error.message })
+    return {
+      statusCode: 429,
+      body: JSON.stringify({
+        message: 'Too Many Requests',
+        error: error.message
+      }),
+      headers: {
+        ...corsHeaders,
+        'Retry-After': String(Math.ceil(error.windowMs / 1000))
+      }
+    }
+  }
+
+  if (error instanceof CircuitOpenError) {
+    logger.warn('responseHandler: CircuitOpenError', { error: error.message })
+    return {
+      statusCode: 503,
+      body: JSON.stringify({
+        message: 'Service Unavailable',
+        error: error.message
+      }),
+      headers: {
+        ...corsHeaders,
+        'Retry-After': String(Math.ceil(error.retryAfterMs / 1000))
+      }
+    }
+  }
+
+  if (error instanceof BulkheadFullError) {
+    logger.warn('responseHandler: BulkheadFullError', { error: error.message })
+    return {
+      statusCode: 503,
+      body: JSON.stringify({
+        message: 'Service Unavailable',
+        error: error.message
+      }),
+      headers: corsHeaders
+    }
   }
 
   if (error instanceof GenerateError) {

@@ -2,6 +2,13 @@ import { APIGatewayProxyEvent, APIGatewayProxyResultV2 } from 'aws-lambda'
 import { GetOrdersController } from '@core/infrastructure/adapters/in/http/GetOrdersController'
 import { DynamoOrderRepository } from '@core/infrastructure/repositories/DynamoDB/DynamoOrderRepository'
 import { logger, responseHandler } from '@powertools/utilities'
+import { SlidingWindowRateLimiter } from '@core/infrastructure/resilience'
+
+// Rate limiter (per-instance)
+const rateLimiter = new SlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 100
+})
 
 // Composition Root
 const orderRepository = new DynamoOrderRepository()
@@ -13,6 +20,7 @@ export const handler = async (
   try {
     logger.info('getOrders handler invoked', { requestId: event.requestContext?.requestId })
 
+    rateLimiter.check()
     const result = await controller.execute(event)
 
     return responseHandler(200, result)

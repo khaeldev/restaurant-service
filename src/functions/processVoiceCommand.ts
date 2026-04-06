@@ -8,9 +8,45 @@ import { DynamoRecipeRepository } from '@core/infrastructure/repositories/Dynamo
 import { DynamoWarehouseRepository } from '@core/infrastructure/repositories/DynamoDB/DynamoWarehouseRepository'
 import { EventBridgePublisher } from '@core/infrastructure/repositories/events/EventBridgePublisher'
 import { logger, responseHandler } from '@powertools/utilities'
+import { CircuitBreaker, Bulkhead, SlidingWindowRateLimiter } from '@core/infrastructure/resilience'
+
+// Rate limiter (per-instance)
+const rateLimiter = new SlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 20
+})
+
+// Resilience singletons for Whisper
+const whisperCircuitBreaker = new CircuitBreaker('OpenAIWhisperClient', {
+  failureThreshold: 2,
+  resetTimeout: 30_000,
+  halfOpenSuccessThreshold: 1
+})
+const whisperBulkhead = new Bulkhead('OpenAIWhisperClient', {
+  maxConcurrent: 3,
+  maxQueueSize: 5,
+  timeoutMs: 25_000
+})
+
+// Resilience singletons for Claude
+const claudeCircuitBreaker = new CircuitBreaker('ClaudeAIClient', {
+  failureThreshold: 2,
+  resetTimeout: 30_000,
+  halfOpenSuccessThreshold: 1
+})
+const claudeBulkhead = new Bulkhead('ClaudeAIClient', {
+  maxConcurrent: 3,
+  maxQueueSize: 5,
+  timeoutMs: 25_000
+})
 
 // Composition Root
-const voiceAIClient = new VoiceAIClient()
+const voiceAIClient = new VoiceAIClient(
+  whisperCircuitBreaker,
+  whisperBulkhead,
+  claudeCircuitBreaker,
+  claudeBulkhead
+)
 const conversationRepository = new DynamoConversationRepository()
 const orderRepository = new DynamoOrderRepository()
 const recipeRepository = new DynamoRecipeRepository()
@@ -33,6 +69,10 @@ export const handler = async (
 ): Promise<APIGatewayProxyResultV2> => {
   try {
     logger.info('processVoiceCommand handler invoked', { requestId: event.requestContext?.requestId })
+
+    // Check rate limit
+    const remaining = rateLimiter.check()
+    logger.info('Rate limiter check passed', { remainingRequests: remaining })
 
     const result = await controller.execute(event)
 

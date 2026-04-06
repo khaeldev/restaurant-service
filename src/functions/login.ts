@@ -4,6 +4,13 @@ import { LoginUsecase } from '@core/app/usecases/LoginUsecase'
 import { DynamoUserRepository } from '@core/infrastructure/repositories/DynamoDB/DynamoUserRepository'
 import { JWTServiceImpl } from '@core/infrastructure/repositories/services/JWTServiceImpl'
 import { logger, responseHandler } from '@powertools/utilities'
+import { SlidingWindowRateLimiter } from '@core/infrastructure/resilience'
+
+// Rate limiter (per-instance)
+const rateLimiter = new SlidingWindowRateLimiter({
+  windowMs: 60_000,
+  maxRequests: 100
+})
 
 // Composition Root
 const userRepository = new DynamoUserRepository()
@@ -17,6 +24,7 @@ export const handler = async (
   try {
     logger.info('login handler invoked', { requestId: event.requestContext?.requestId })
 
+    rateLimiter.check()
     const result = await controller.execute(event)
 
     return responseHandler(200, result)

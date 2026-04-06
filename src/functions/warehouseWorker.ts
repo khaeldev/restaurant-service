@@ -5,11 +5,24 @@ import { DynamoPurchaseRepository } from '@core/infrastructure/repositories/Dyna
 import { FarmersMarketClient } from '@core/infrastructure/repositories/clients/FarmersMarketClient'
 import { EventBridgePublisher } from '@core/infrastructure/repositories/events/EventBridgePublisher'
 import { logger } from '@powertools/utilities'
+import { CircuitBreaker, Bulkhead } from '@core/infrastructure/resilience'
+
+// Resilience singletons (persist across warm invocations)
+const farmersMarketCircuitBreaker = new CircuitBreaker('FarmersMarketClient', {
+  failureThreshold: 3,
+  resetTimeout: 10_000,
+  halfOpenSuccessThreshold: 2
+})
+const farmersMarketBulkhead = new Bulkhead('FarmersMarketClient', {
+  maxConcurrent: 5,
+  maxQueueSize: 10,
+  timeoutMs: 8_000
+})
 
 // Composition Root
 const warehouseRepository = new DynamoWarehouseRepository()
 const purchaseRepository = new DynamoPurchaseRepository()
-const farmersMarketClient = new FarmersMarketClient()
+const farmersMarketClient = new FarmersMarketClient(farmersMarketCircuitBreaker, farmersMarketBulkhead)
 const eventPublisher = new EventBridgePublisher()
 const procureIngredientsUsecase = new ProcureIngredientsUsecase(
   warehouseRepository,
