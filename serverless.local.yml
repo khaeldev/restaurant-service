@@ -65,6 +65,17 @@ package:
   individually: true
 
 custom:
+  authorizerConfig:
+    name: authAuthorizer
+    type: request
+    resultTtlInSeconds: 60
+    identitySource: method.request.header.Authorization
+
+  authorizer:
+    local: ''
+    dev: ${self:custom.authorizerConfig}
+    prod: ${self:custom.authorizerConfig}
+
   cors:
     origin: ${self:custom.origins.${self:provider.stage}}
     headers:
@@ -101,11 +112,7 @@ functions:
           path: orders
           method: post
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
 
   getOrders:
     handler: src/functions/getOrders.handler
@@ -114,11 +121,7 @@ functions:
           path: orders
           method: get
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
 
   getOrderById:
     handler: src/functions/getOrderById.handler
@@ -127,11 +130,7 @@ functions:
           path: orders/{orderId}
           method: get
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
           request:
             parameters:
               paths:
@@ -144,11 +143,7 @@ functions:
           path: inventory
           method: get
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
 
   getPurchases:
     handler: src/functions/getPurchases.handler
@@ -157,11 +152,7 @@ functions:
           path: purchases
           method: get
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
 
   authAuthorizer:
     handler: src/functions/authAuthorizer.handler
@@ -191,11 +182,7 @@ functions:
           path: recipes
           method: get
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
 
   processVoiceCommand:
     handler: src/functions/processVoiceCommand.handler
@@ -206,11 +193,7 @@ functions:
           path: voice/process
           method: post
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
 
   getConversationHistory:
     handler: src/functions/getConversationHistory.handler
@@ -219,11 +202,7 @@ functions:
           path: voice/conversations/{sessionId}
           method: get
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
           request:
             parameters:
               paths:
@@ -236,11 +215,7 @@ functions:
           path: voice/context
           method: get
           cors: ${self:custom.cors}
-          authorizer:
-            name: authAuthorizer
-            type: request
-            resultTtlInSeconds: 60
-            identitySource: method.request.header.Authorization
+          authorizer: ${self:custom.authorizer.${self:provider.stage}}
 
   seedData:
     handler: src/functions/seedData.handler

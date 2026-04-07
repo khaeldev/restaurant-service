@@ -1,0 +1,28 @@
+services:
+  localstack:
+    image: localstack/localstack:latest
+    container_name: restaurant-service-localstack
+    ports:
+      - "4566:4566"
+      - "4571:4571"
+    env_file:
+      - .env
+    environment:
+      - SERVICES=dynamodb,sqs,events,lambda,apigateway,sts,iam,cloudformation,ssm,logs
+      - DEBUG=0
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_ACCESS_KEY_ID=local
+      - AWS_SECRET_ACCESS_KEY=local
+      - LAMBDA_EXECUTOR=docker-reuse
+      - LAMBDA_CONTAINER_REGISTRY=public.ecr.aws
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-localstack-secret}
+      - LOCALSTACK_SERVICES_EDGE_ENFORCE_HTTPS=false
+      - DISABLE_TELEMETRY=1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:4566/_localstack/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
