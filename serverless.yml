@@ -73,8 +73,8 @@ custom:
     allowCredentials: true
 
   origins:
-    dev: https://frontend-alpha-eosin-62.vercel.app
-    prod: https://frontend-alpha-eosin-62.vercel.app
+    dev: https://frontend-nine-lilac-60.vercel.app
+    prod: https://frontend-nine-lilac-60.vercel.app
     local: http://127.0.0.1:3000
 
   serverless-offline:
@@ -84,7 +84,7 @@ custom:
   localstack:
     stages:
       - local
-    host: localhost
+    host: 127.0.0.1
     port: 4566
     autostart: false
     docker: true
