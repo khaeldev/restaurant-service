@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   swcMinify: true,
+  allowedDevOrigins: ['localhost', '127.0.0.1'],
   headers: async () => {
     return [
       {

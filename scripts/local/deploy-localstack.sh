@@ -29,7 +29,8 @@ serverless deploy \
   --param=OPENAI_API_KEY=local \
   --param=ANTHROPIC_API_KEY=local \
   --param=JWT_SECRET=local-dev-secret-change-this \
-  --param=FARMERS_MARKET_API_URL=http://127.0.0.1:4566/local/farmers-market/buy
+  --param=FARMERS_MARKET_API_URL=http://localhost:4566/restapis/wuwardphyk/local/_user_request_/farmers-market/buy \
+  --param=FRONTEND_URL=http://127.0.0.1:3000
 
 echo -e "\n${GREEN}✅ Deployment complete!${NC}"
 echo "Run seed with: npm run seed:local"

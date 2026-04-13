@@ -84,10 +84,9 @@ custom:
     allowCredentials: true
 
   origins:
-    dev: https://frontend-alpha-eosin-62.vercel.app
-    prod: https://frontend-alpha-eosin-62.vercel.app
-    local: 
-      - http://127.0.0.1:3000
+    dev: ${param:FRONTEND_URL}
+    prod: ${param:FRONTEND_URL}
+    local: ${param:FRONTEND_URL, http://127.0.0.1:3000}
 
   serverless-offline:
     httpPort: 3000
