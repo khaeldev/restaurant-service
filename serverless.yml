@@ -73,8 +73,8 @@ custom:
     allowCredentials: true
 
   origins:
-    dev: https://frontend-nine-lilac-60.vercel.app
-    prod: https://frontend-nine-lilac-60.vercel.app
+    dev: ${param:FRONTEND_URL}
+    prod: ${param:FRONTEND_URL}
     local: http://127.0.0.1:3000
 
   serverless-offline:

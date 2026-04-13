@@ -41,7 +41,7 @@ jobs:
           # AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }} # Optional: only if using session tokens
 
       - name: Deploy with Serverless
-        run: serverless deploy --stage ${{ env.STAGE }} --region ${{ env.AWS_REGION }} --param=OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} --param=ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} --param=JWT_SECRET=${{ secrets.JWT_SECRET }}
+        run: serverless deploy --stage ${{ env.STAGE }} --region ${{ env.AWS_REGION }} --param=OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }} --param=ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }} --param=JWT_SECRET=${{ secrets.JWT_SECRET }} --param=FRONTEND_URL=${{secrets.FRONTEND_URL}}
         env:
           SERVERLESS_ACCESS_KEY: ${{ secrets.SERVERLESS_ACCESS_KEY }}
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
